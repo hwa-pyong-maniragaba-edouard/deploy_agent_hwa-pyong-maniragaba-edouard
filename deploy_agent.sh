@@ -61,17 +61,17 @@ run_app() {
 deploy_project() {
     # fail early if the tools or templates we need are missing
     if ! command -v python3 > /dev/null 2>&1; then
-        echo "ERROR: python3 is not installed." >&2
+        echo "This error was detected: python3 is not installed." >&2
         return 1
     fi
     if ! command -v zip > /dev/null 2>&1; then
-        echo "ERROR: zip is not installed." >&2
+        echo "This error occurred: zip is not installed." >&2
         return 1
     fi
     python3 --version
     for f in attendance_checker.py assets.csv config.json; do
         if [ ! -f "$TEMPLATES_DIR/$f" ]; then
-            echo "ERROR: $TEMPLATES_DIR/$f is missing." >&2
+            echo "There is this  error: $TEMPLATES_DIR/$f is missing." >&2
             return 1
         fi
     done
@@ -84,7 +84,7 @@ deploy_project() {
         if [[ "$answer" =~ ^[Yy]$ ]]; then
             rm -rf "$PROJECT_DIR"
         else
-            echo "ERROR: aborted - $PROJECT_DIR was left untouched." >&2
+            echo "There was an error: aborted - $PROJECT_DIR was left untouched." >&2
             return 1
         fi
     fi
@@ -155,6 +155,7 @@ deploy_project() {
 
     # optional threshold update; Enter keeps the default
     local update
+    echo ""
     read -r -p "Update the attendance alert thresholds? (y/n): " update
     echo ""
     if [[ "$update" =~ ^[Yy]$ ]]; then
@@ -187,6 +188,39 @@ deploy_project() {
     # a successful start proves structure, roster and config work together
     echo "Verifying deployment by running the application..."
     run_app "$PROJECT_DIR"
+}
+
+#  copy each existing log into its own archive folder with a timestamp
+archive_logs() {
+    ask_project_name || return 1
+    if [ ! -d "$PROJECT_DIR" ]; then
+        echo "There was this error : $PROJECT_DIR does not exist, create it by first choosing option 1" >&2
+        return 1
+    fi
+
+    local stamp
+    stamp=$(date +%Y%m%d_%H%M%S)
+    local archived=0
+
+    mkdir -p "$PROJECT_DIR/archives/attendance" "$PROJECT_DIR/archives/absent" ||
+        { echo "There was an error: cannot create archive directories." >&2; return 1; }
+
+    local name src dest
+    for name in attendance absent; do
+        src="$PROJECT_DIR/reports/${name}.log"
+        dest="$PROJECT_DIR/archives/${name}/${name}_${stamp}.log"
+        if [ -f "$src" ]; then
+            if cp "$src" "$dest"; then
+                echo "Archived: $src -> $dest"
+                archived=$(( archived + 1 ))
+            else
+                echo "There was an error: failed to archive $src" >&2
+            fi
+        else
+            echo "Skipped some like:  $src does not exist (nothing to archive)."
+        fi
+    done
+    echo "Archive finished: $archived log(s) archived."
 }
 
 
