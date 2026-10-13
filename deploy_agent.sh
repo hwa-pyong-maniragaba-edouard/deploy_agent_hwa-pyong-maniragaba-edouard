@@ -12,6 +12,25 @@ is_number() {
     [[ "$1" =~ ^[0-9]+$ ]]
 }
 
+# this function responds to on Ctrl+C (SIGINT) or Ctrl+Z (SIGTSTP) during deployment:
+# zip whatever exists so far, then delete the half-made folder.
+handle_interrupt() {
+    echo ""
+    echo "Attention, deployment was interrupted by user."
+    if [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ]; then
+        local archive="${PROJECT_DIR}_archive.zip"
+        echo "Archiving the incomplete project into $archive ..."
+        zip -r -q "$archive" "$PROJECT_DIR"
+        echo "Removing the incomplete created directory $PROJECT_DIR ..."
+        rm -rf "$PROJECT_DIR"
+        echo "Action done. Incomplete work saved in $archive."
+       echo "This terminal Session is being closed."
+    else
+        echo "Nothing had been created yet, so there is nothing to archive."
+    fi
+    exit 130
+}
+
 # This fucntion is Called when a step fails in the mid deploy and then
 # prints the error and also avoids a half built project behind by removin it.
 abort_deploy() {
@@ -20,6 +39,7 @@ abort_deploy() {
         rm -rf "$PROJECT_DIR"
         echo "removed the half built directory $PROJECT_DIR." >&2
     fi
+    trap - SIGINT SIGTSTP
     return 1
 }
 
@@ -88,6 +108,9 @@ deploy_project() {
             return 1
         fi
     fi
+
+    trap handle_interrupt SIGINT SIGTSTP
+
     # structure + the two files that are always copied unchanged
     if ! mkdir -p "$PROJECT_DIR/Helpers" "$PROJECT_DIR/reports"; then
         abort_deploy "could not create directories (permission denied?)"
@@ -182,7 +205,7 @@ deploy_project() {
         rm -f "$cfg.bak"
         echo "Thresholds updated: warning=$warn, failure=$fail"
     fi
-
+    trap - SIGINT SIGTSTP
     echo "Deployment of $PROJECT_DIR was completed"
 
     # a successful start proves structure, roster and config work together
