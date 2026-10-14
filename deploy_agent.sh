@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-# This deploy_agent.sh is used to deploy, run and archives logs for the attendance tracker
+# This deploy_agent.sh is used to deploy, run, and archive logs for the attendance tracker
 
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
@@ -12,49 +12,51 @@ is_number() {
     [[ "$1" =~ ^[0-9]+$ ]]
 }
 
-# this function responds to on Ctrl+C (SIGINT) or Ctrl+Z (SIGTSTP) during deployment:
+# this function responds to Ctrl+C (SIGINT) or Ctrl+Z (SIGTSTP) during deployment:
 # zip whatever exists so far, then delete the half-made folder.
 handle_interrupt() {
     echo ""
-    echo "Attention, deployment was interrupted by user."
+    echo "Attention, the deployment was interrupted by the user."
     if [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ]; then
         local archive="${PROJECT_DIR}_archive.zip"
         echo "Archiving the incomplete project into $archive ..."
+        # remove any old zip with the same name so zip creates a fresh archive instead of updating it
+        rm -f "$archive"
         zip -r -q "$archive" "$PROJECT_DIR"
-        echo "Removing the incomplete created directory $PROJECT_DIR ..."
+        echo "Removing the incomplete directory $PROJECT_DIR ..."
         rm -rf "$PROJECT_DIR"
-        echo "Action done. Incomplete work saved in $archive."
-       echo "This terminal Session is being closed."
+        echo "Done. The incomplete work was saved in $archive."
+       echo "This terminal session is being closed."
     else
         echo "Nothing had been created yet, so there is nothing to archive."
     fi
     exit 130
 }
 
-# This fucntion is Called when a step fails in the mid deploy and then
-# prints the error and also avoids a half built project behind by removin it.
+# This function is called when a step fails in the middle of a deployment. It
+# prints the error and also avoids leaving a half-built project behind by removing it.
 abort_deploy() {
-    echo "There was this error: $1" >&2
+    echo "There was an error: $1" >&2
     if [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ]; then
         rm -rf "$PROJECT_DIR"
-        echo "removed the half built directory $PROJECT_DIR." >&2
+        echo "Removed the half-built directory $PROJECT_DIR." >&2
     fi
     trap - SIGINT SIGTSTP
     return 1
 }
 
 
-# This asks for the project name and sets it's PROJECT_DIR variable.
+# This asks for the project name and sets its PROJECT_DIR variable.
 # The name is checked because we later run rm -rf on this path.
 ask_project_name() {
     local input
-    read -r -p "Enter the project name, which will be used as attendance_tracker_<name>, like v1 as a name: " input
+    read -r -p "Enter the project name, which will be used as attendance_tracker_<name> (for example, v1): " input
     if [ -z "$input" ]; then
-        echo "an error detected: The name cannot be empty." >&2
+        echo "An error was detected: the name cannot be empty." >&2
         return 1
     fi
     if [[ ! "$input" =~ ^[A-Za-z0-9_-]+$ ]]; then
-        echo "an error detected: use only letters, digits, '-' and '_'." >&2
+        echo "An error was detected: use only letters, digits, '-' and '_'." >&2
         return 1
     fi
     PROJECT_DIR="attendance_tracker_${input}"
@@ -67,7 +69,7 @@ ask_project_name() {
 run_app() {
     local dir="$1"
     if [ ! -d "$dir" ]; then
-        echo "There was this error: $dir does not exist. Deploy it first using option 1." >&2
+        echo "There was an error: $dir does not exist. Deploy it first using option 1." >&2
         return 1
     fi
     echo "Starting the Attendance Checker in $dir ..."
@@ -77,21 +79,21 @@ run_app() {
 }
 
 
-# this whole functions is used to deploy the application
+# this whole function is used to deploy the application
 deploy_project() {
     # fail early if the tools or templates we need are missing
     if ! command -v python3 > /dev/null 2>&1; then
-        echo "This error was detected: python3 is not installed." >&2
+        echo "An error was detected: python3 is not installed." >&2
         return 1
     fi
     if ! command -v zip > /dev/null 2>&1; then
-        echo "This error occurred: zip is not installed." >&2
+        echo "An error occurred: zip is not installed." >&2
         return 1
     fi
     python3 --version
     for f in attendance_checker.py assets.csv config.json; do
         if [ ! -f "$TEMPLATES_DIR/$f" ]; then
-            echo "There is this  error: $TEMPLATES_DIR/$f is missing." >&2
+            echo "There was an error: $TEMPLATES_DIR/$f is missing." >&2
             return 1
         fi
     done
@@ -102,7 +104,8 @@ deploy_project() {
     if [ -d "$PROJECT_DIR" ]; then
         read -r -p "$PROJECT_DIR already exists. Overwrite? (y/n): " answer
         if [[ "$answer" =~ ^[Yy]$ ]]; then
-            rm -rf "$PROJECT_DIR"
+            rm -rf "$PROJECT_DIR" ||
+                { echo "There was an error: could not remove the old $PROJECT_DIR." >&2; return 1; }
         else
             echo "There was an error: aborted - $PROJECT_DIR was left untouched." >&2
             return 1
@@ -140,6 +143,7 @@ deploy_project() {
             is_number "$count" && [ "$count" -ge 1 ] && [ "$count" -le "$available" ] && break
             echo "Please enter a whole number between 1 and $available."
         done
+        count=$((10#$count))
         # header + count rows. Template rows have 4 prior sessions,
         # so total_sessions stays 5 (the template default).
         head -n $(( count + 1 )) "$TEMPLATES_DIR/assets.csv" > "$PROJECT_DIR/Helpers/assets.csv" ||
@@ -157,6 +161,7 @@ deploy_project() {
             is_number "$count" && [ "$count" -ge 1 ] && [ "$count" -le "$max" ] && break
             echo "Please enter a whole number between 1 and $max."
         done
+        count=$((10#$count))
         # everyone starts at 0 attended / 0 absent
         {
             echo "Email,Names,Attendance Count,Absence Count"
@@ -171,8 +176,9 @@ deploy_project() {
     fi
 
     # script is executable; config (grading thresholds) is owner-only
-    chmod +x "$PROJECT_DIR/attendance_checker.py"
-    chmod 600 "$PROJECT_DIR/Helpers/config.json"
+    chmod +x "$PROJECT_DIR/attendance_checker.py" &&
+    chmod 600 "$PROJECT_DIR/Helpers/config.json" ||
+        { abort_deploy "could not set the file permissions (chmod failed)."; return 1; }
     echo "Permissions set:"
     ls -l "$PROJECT_DIR/attendance_checker.py" "$PROJECT_DIR/Helpers/config.json"
 
@@ -198,6 +204,8 @@ deploy_project() {
                 break
             fi
         done
+        # strip leading zeros (075 -> 75) so the JSON stays valid
+        warn=$((10#$warn)); fail=$((10#$fail))
         local cfg="$PROJECT_DIR/Helpers/config.json"
         # each pattern only matches its own line, so the file layout stays untouched
         sed -i.bak "s/\"warning\": [0-9]*/\"warning\": $warn/" "$cfg"
@@ -217,7 +225,7 @@ deploy_project() {
 archive_logs() {
     ask_project_name || return 1
     if [ ! -d "$PROJECT_DIR" ]; then
-        echo "There was this error : $PROJECT_DIR does not exist, create it by first choosing option 1" >&2
+        echo "There was an error: $PROJECT_DIR does not exist. Create it first by choosing option 1." >&2
         return 1
     fi
 
@@ -240,7 +248,7 @@ archive_logs() {
                 echo "There was an error: failed to archive $src" >&2
             fi
         else
-            echo "Skipped some like:  $src does not exist (nothing to archive)."
+            echo "Skipped: $src does not exist (nothing to archive)."
         fi
     done
     echo "Archive finished: $archived log(s) archived."
@@ -248,7 +256,7 @@ archive_logs() {
 
 
 
-# this is the main menu, where it stays at the bottom because bash must read the functions first.
+# this is the main menu. It stays at the bottom because bash must read the functions first.
 while true; do
     echo ""
     echo "Hi user, choose one of the options below :) "
@@ -258,12 +266,12 @@ while true; do
     echo "3 : Archive the log files"
     echo "4 : Exit"
     echo ""
-    read -r -p "Choose an option 1 to 4: " option
+    read -r -p "Choose an option 1 to 4: " option || { echo; echo "exit."; exit 0; }
     case "$option" in
         1) deploy_project ;;
         2) ask_project_name && run_app "$PROJECT_DIR" ;;
         3) archive_logs ;;
         4) echo "exit."; exit 0 ;;
-        *) echo "you choose an invalid option, please choose 1 to 4." ;;
+        *) echo "You chose an invalid option. Please choose 1 to 4." ;;
     esac
 done
