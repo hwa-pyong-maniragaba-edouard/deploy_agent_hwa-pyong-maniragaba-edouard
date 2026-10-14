@@ -4,8 +4,7 @@ Deploy Agent is a single shell script, `deploy_agent.sh`, that sets up, runs, an
 
 If you get stuck, search this page for the exact message you see; the [Troubleshooting](#6-troubleshooting-what-you-might-see-and-what-to-do) section lists every message the script can print. Not sure what a word means? See the [glossary](#11-glossary-words-youll-see) at the end.
 
-**Video walkthrough:** `https://youtu.be/JFItV70InWk`
-
+**Video walkthrough:** https://youtu.be/JFItV70InWk
 ---
 
 ## Contents
