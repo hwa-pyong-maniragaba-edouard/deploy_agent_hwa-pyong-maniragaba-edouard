@@ -1,0 +1,9 @@
+# Projects deployed by deploy_agent.sh while testing
+attendance_tracker_*/
+
+# Zips made when a deployment is interrupted
+attendance_tracker_*_archive.zip
+
+# Temporary files from sed -i.bak and vim
+*.bak
+*.swp
